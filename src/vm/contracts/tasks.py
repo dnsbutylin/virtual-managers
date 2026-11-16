@@ -9,9 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class Channel(StrEnum):
-    """Канал первого касания."""
+    """Канал первого касания.
+
+    Почта, голос, форма и три мессенджера со встречи — отдельные каналы:
+    касание создаётся только по тому, который отмечен в записи базы.
+    ``mobile`` остаётся пилотом устройства, если канал не различен.
+    """
 
     EMAIL = "email"
+    WHATSAPP = "whatsapp"
+    TELEGRAM = "telegram"
+    VK = "vk"
     WEBFORM = "webform"
     VOICE = "voice"
     MOBILE = "mobile"

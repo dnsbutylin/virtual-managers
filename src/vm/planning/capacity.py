@@ -95,6 +95,20 @@ def period_capacity(
     return sum(daily_capacity(batches, schedule, day) for day in range(first_day, last_day + 1))
 
 
+def steady_month_capacity(
+    mailboxes: int,
+    daily_limit: int,
+    days_in_month: int = 30,
+) -> int:
+    """Письма за месяц с ящиков, которые уже на дневном лимите.
+
+    Прогрева нет: так считается текущий парк, а не новая партия доменов.
+    """
+    if mailboxes < 0 or daily_limit < 0 or days_in_month < 1:
+        raise ValueError("число ящиков и лимит неотрицательны, в месяце хотя бы один день")
+    return mailboxes * daily_limit * days_in_month
+
+
 def mailboxes_needed(
     target_per_month: int,
     steady_daily_limit: int,
@@ -138,6 +152,16 @@ def main() -> None:
     for target in (350000, 455000, 591500):
         workers, total = mailboxes_needed(target, 40)
         lines.append(f"Цель {target}: рабочих {workers}, всего {total}")
+    lines.append("")
+    lines.append("Текущий парк без прогрева, 30 дней")
+    for mailboxes in (40, 60):
+        for daily_limit in (40, 100):
+            total = steady_month_capacity(mailboxes, daily_limit)
+            lines.append(f"{mailboxes} ящиков по {daily_limit} в день: {total}")
+    lines.append("")
+    lines.append("Потребность в ящиках при лимите 100 писем в день, 30 дней, резерв 0.2")
+    workers, total = mailboxes_needed(350000, 100)
+    lines.append(f"Цель 350000: рабочих {workers}, всего {total}")
     print("\n".join(lines))
 
 
