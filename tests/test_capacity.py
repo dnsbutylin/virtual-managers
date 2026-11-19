@@ -7,6 +7,7 @@ from vm.planning.capacity import (
     MailboxBatch,
     WarmupSchedule,
     WarmupStep,
+    compounded_target,
     daily_capacity,
     mailboxes_needed,
     period_capacity,
@@ -40,16 +41,25 @@ def test_all_mailboxes_from_day_one() -> None:
 
 
 def test_mailboxes_needed_for_350000() -> None:
-    # ceil(350000 / 30 / 40) = 292, ceil(292 * 1.2) = 351.
-    assert mailboxes_needed(350000, 40) == (292, 351)
+    # ceil(350000 / 30 / 40) = 292. Резерв 0.2 — старая оценка доменного пути.
+    assert mailboxes_needed(350000, 40, reserve=0.2) == (292, 351)
+    assert mailboxes_needed(350000, 40) == (292, 292)
 
 
-def test_existing_fleet_has_no_warmup() -> None:
-    # 60 * 40 * 30 = 72000. На лимите 100 в день цель 350 тыс. требует 117 рабочих.
+def test_steady_limit_without_warmup() -> None:
     assert steady_month_capacity(60, 40) == 72000
     assert steady_month_capacity(60, 100) == 180000
     assert steady_month_capacity(40, 40) == 48000
-    assert mailboxes_needed(350000, 100) == (117, 141)
+    assert steady_month_capacity(117, 100) == 351000
+
+
+def test_gmail_plan_has_no_reserve() -> None:
+    # ceil(цель / 30 / 100), резерв 0. Это числа видения, не доменная смета.
+    assert mailboxes_needed(350000, 100, reserve=0) == (117, 117)
+    assert mailboxes_needed(455000, 100, reserve=0) == (152, 152)
+    assert mailboxes_needed(591500, 100, reserve=0) == (198, 198)
+    assert compounded_target(350000, 0.3, 1) == 350000
+    assert 6_200_000 < compounded_target(350000, 0.3, 12) < 6_400_000
 
 
 def test_steady_month_rejects_bad_inputs() -> None:

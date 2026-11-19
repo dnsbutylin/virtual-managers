@@ -1,7 +1,10 @@
-"""Расчёт мощности почтового канала с учётом прогрева ящиков.
+"""Расчёт мощности почты.
 
-DEFAULT_WARMUP — допущение по отраслевой практике, а не норма почтового
-провайдера. Лимиты уточняются пилотом: с 1-го дня 5 писем, с 8-го 10,
+Рабочий план — новые ящики Gmail на дневном лимите с первого дня, без прогрева
+и без резерва. Его печатает ``python -m vm.planning.capacity``.
+
+DEFAULT_WARMUP — оценка для доменного теста, если такой тест отдельно одобрят.
+Это не норма Gmail и не смета первого месяца: с 1-го дня 5 писем, с 8-го 10,
 с 15-го 20, с 22-го 30, с 29-го 40.
 """
 
@@ -102,7 +105,7 @@ def steady_month_capacity(
 ) -> int:
     """Письма за месяц с ящиков, которые уже на дневном лимите.
 
-    Прогрева нет: так считается текущий парк, а не новая партия доменов.
+    Прогрева нет. Так считается рабочий план Gmail.
     """
     if mailboxes < 0 or daily_limit < 0 or days_in_month < 1:
         raise ValueError("число ящиков и лимит неотрицательны, в месяце хотя бы один день")
@@ -113,55 +116,39 @@ def mailboxes_needed(
     target_per_month: int,
     steady_daily_limit: int,
     days_in_month: int = 30,
-    reserve: float = 0.2,
+    reserve: float = 0,
 ) -> tuple[int, int]:
     """Сколько ящиков нужно на месячную цель при установившемся дневном лимите.
 
     Возвращает (рабочих, всего с резервом). Оба числа округляются вверх:
     рабочих = ceil(target / days / limit), всего = ceil(рабочих * (1 + reserve)).
+    Резерв рабочего плана — 0.
     """
     workers = ceil(target_per_month / days_in_month / steady_daily_limit)
     total = ceil(workers * (1 + reserve))
     return workers, total
 
 
+def compounded_target(start: int, monthly_growth: float, month: int) -> int:
+    """Цель месяца ``month`` при росте каждый месяц. Месяц 1 равен ``start``."""
+    if month < 1:
+        raise ValueError("месяц начинается с 1")
+    return round(start * (1 + monthly_growth) ** (month - 1))
+
+
 def main() -> None:
-    """Печатает сценарии мощности для пилотного набора ящиков."""
-    periods = ((1, 30), (31, 60), (61, 90))
-    staggered = (
-        MailboxBatch(start_day=1, mailboxes=90),
-        MailboxBatch(start_day=8, mailboxes=90),
-        MailboxBatch(start_day=15, mailboxes=90),
-        MailboxBatch(start_day=22, mailboxes=81),
-    )
-    at_once = (MailboxBatch(start_day=1, mailboxes=351),)
+    """Печатает ящики рабочего плана: 100 писем в день, без резерва и без прогрева."""
     lines = [
-        "Партии: день 1: 90 ящиков, день 8: 90, день 15: 90, день 22: 81",
-        "Расписание: прогрев по умолчанию",
+        "Рабочий план: новые ящики Gmail, 100 писем в день, 30 дней, без прогрева и без резерва",
     ]
-    for first_day, last_day in periods:
-        total = period_capacity(staggered, DEFAULT_WARMUP, first_day, last_day)
-        lines.append(f"Сумма за дни {first_day}-{last_day}: {total}")
-    lines.append("")
-    lines.append("Вариант: все 351 ящик в день 1")
-    for first_day, last_day in periods:
-        total = period_capacity(at_once, DEFAULT_WARMUP, first_day, last_day)
-        lines.append(f"Сумма за дни {first_day}-{last_day}: {total}")
-    lines.append("")
-    lines.append("Потребность в ящиках при лимите 40 писем в день, 30 дней, резерв 0.2")
-    for target in (350000, 455000, 591500):
-        workers, total = mailboxes_needed(target, 40)
-        lines.append(f"Цель {target}: рабочих {workers}, всего {total}")
-    lines.append("")
-    lines.append("Текущий парк без прогрева, 30 дней")
-    for mailboxes in (40, 60):
-        for daily_limit in (40, 100):
-            total = steady_month_capacity(mailboxes, daily_limit)
-            lines.append(f"{mailboxes} ящиков по {daily_limit} в день: {total}")
-    lines.append("")
-    lines.append("Потребность в ящиках при лимите 100 писем в день, 30 дней, резерв 0.2")
-    workers, total = mailboxes_needed(350000, 100)
-    lines.append(f"Цель 350000: рабочих {workers}, всего {total}")
+    for target in (350_000, 455_000, 591_500):
+        workers, _total = mailboxes_needed(target, 100, reserve=0)
+        lines.append(f"Цель {target}: {workers} ящиков")
+    month_12 = compounded_target(350_000, 0.3, 12)
+    workers, _total = mailboxes_needed(month_12, 100, reserve=0)
+    lines.append(
+        f"Месяц 12 при плюс 30% каждый месяц: {month_12} касаний, {workers} ящиков одной почтой"
+    )
     print("\n".join(lines))
 
 
